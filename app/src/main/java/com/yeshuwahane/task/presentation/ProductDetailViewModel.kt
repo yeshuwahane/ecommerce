@@ -4,7 +4,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.yeshuwahane.task.data.ECommerceRepositoryImpl
 import com.yeshuwahane.task.data.model.WSModel
-import com.yeshuwahane.task.domain.ECommerceRepository
 import com.yeshuwahane.task.utils.DataResource
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -19,7 +18,7 @@ import javax.inject.Inject
 @HiltViewModel
 class ProductDetailViewModel @Inject constructor(val repository: ECommerceRepositoryImpl): ViewModel() {
 
-    private val _productDetailsState = MutableStateFlow(ProductDetailState())
+    private val _productDetailsState = MutableStateFlow(ProductDetailState(productDetails = DataResource.loading()))
     val productDetailsState = _productDetailsState
         .onStart {
             getProductDetails()
@@ -31,15 +30,13 @@ class ProductDetailViewModel @Inject constructor(val repository: ECommerceReposi
         )
 
 
-    fun getProductDetails(){
-
+    private fun getProductDetails(){
         viewModelScope.launch {
             val productDetials = repository.getProductDetails()
             _productDetailsState.update {
-                it.copy(DataResource.success(productDetials))
+                it.copy(productDetials)
             }
         }
-
     }
 
 }
@@ -47,7 +44,7 @@ class ProductDetailViewModel @Inject constructor(val repository: ECommerceReposi
 
 
 
-data class ProductDetailState(val productDetails: DataResource<WSModel> = DataResource.initial())
+data class ProductDetailState(val productDetails: DataResource<WSModel?> = DataResource.initial())
 
 
 

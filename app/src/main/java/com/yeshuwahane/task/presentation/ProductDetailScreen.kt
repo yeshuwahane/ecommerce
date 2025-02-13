@@ -86,347 +86,84 @@ import kotlinx.coroutines.launch
 
 @SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
 @Composable
-fun ProductDetailScreen(modifier: Modifier = Modifier) {
-    ProductDetailCompose()
+fun ProductDetailScreen(modifier: Modifier) {
+    val viewModel = hiltViewModel<ProductDetailViewModel>()
+    val uiState by viewModel.productDetailsState.collectAsStateWithLifecycle()
+
+    if (uiState.productDetails.isLoading()){
+        ProductDetailShimmer()
+    }else if (uiState.productDetails.isSuccess()){
+        ProductDetailCompose(uiState)
+    } else{
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center){
+            Text("Error, problem loading your product")
+        }
+    }
+
 }
 
 
-@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun ProductDetailCompose() {
-    val viewModel = hiltViewModel<ProductDetailViewModel>()
-    val uiState by viewModel.productDetailsState.collectAsStateWithLifecycle()
+fun ProductDetailCompose( uiState: ProductDetailState) {
     val productDetails = uiState.productDetails.data?.data
     val attributes = productDetails?.configurable_option?.firstOrNull()?.attributes.orEmpty()
 
     var selectedColorIndex by remember { mutableStateOf(0) }
-
-    // Combine images from all attributes
     val allImages = attributes.flatMap { it.images }
     val pagerState = rememberPagerState(pageCount = { allImages.size })
-
     val coroutineScope = rememberCoroutineScope()
     var productQuantity by remember { mutableIntStateOf(0) }
 
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    productDetails?.name?.let {
-                        Text(
-                            text = it,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 16.sp
-                        )
-                    }
-                },
-                navigationIcon = {
-                    IconButton(onClick = { /* TODO: Handle back */ }) {
-                        Icon(Icons.Default.KeyboardArrowLeft, contentDescription = "Back")
-                    }
-                },
-                actions = {
-                    Icon(
-                        Icons.Default.FavoriteBorder,
-                        contentDescription = "Favorite",
-                        Modifier.padding(2.dp)
-                    )
-                    Icon(
-                        Icons.Default.IosShare,
-                        contentDescription = "Share",
-                        Modifier.padding(2.dp)
-                    )
-                    Icon(
-                        Icons.Default.ShoppingBag,
-                        contentDescription = "Shopping bag",
-                        Modifier.padding(2.dp)
-                    )
-                }
-            )
-        }
+        topBar = { ProductDetailTopBar(productDetails?.name) }
     ) { paddingValues ->
-
         ConstraintLayout(modifier = Modifier.fillMaxSize()) {
-
-            val (topLayout, bottomLayout) = createRefs()
+            val (content, bottomButtons) = createRefs()
 
             Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(paddingValues)
                     .verticalScroll(rememberScrollState())
+                    .constrainAs(content) { top.linkTo(parent.top) }
             ) {
-                // Image Slider
-                HorizontalPager(
-                    state = pagerState,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .aspectRatio(1f),
-                    userScrollEnabled = true
-                ) { page ->
-                    allImages.getOrNull(page)?.let { imageUrl ->
-                        AsyncImage(
-                            model = imageUrl,
-                            contentDescription = "Product Image",
-                            modifier = Modifier
-                                .fillMaxSize(),
-                            contentScale = ContentScale.Crop
-                        )
-                    }
+                ImageSlider(allImages, pagerState)
+                ImageIndicators(pagerState)
+
+                ProductDetailsSection(productDetails, attributes, selectedColorIndex)
+
+                ColorOptions(attributes, selectedColorIndex) { index, targetIndex ->
+                    selectedColorIndex = index
+                    coroutineScope.launch { pagerState.animateScrollToPage(targetIndex) }
                 }
 
-                // Slider Indicators
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 8.dp),
-                    horizontalArrangement = Arrangement.Center
-                ) {
-                    repeat(pagerState.pageCount) { iteration ->
-                        val color =
-                            if (pagerState.currentPage == iteration) Color.Black // Black color
-                            else Color(0xffd5c177) // golden  for inactive indicators
-                        Box(
-                            modifier = Modifier
-                                .padding(horizontal = 3.dp) // Reduce space between indicators
-                                .clip(CircleShape)
-                                .background(color)
-                                .size(10.dp)
-                        )
-                    }
-                }
+                PaymentInfoCard()
 
-                // Product Details
-                Row(
-                    modifier = Modifier
-                        .padding(start = 10.dp, end = 10.dp, bottom = 5.dp, top = 10.dp)
-                        .fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(
-                        text = productDetails?.brand_name ?: "",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 20.sp,
-                    )
+                QuantitySelector(productQuantity) { productQuantity = it }
 
-                    Text(
-                        text = "${attributes.getOrNull(selectedColorIndex)?.price ?: "0.000"} KWD",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 18.sp,
-                    )
-                }
+                ProductInfoSection(productDetails?.description)
 
-
-
-                Text(
-                    text = productDetails?.name ?: "",
-                    color = Color.Gray,
-                    fontSize = 15.sp,
-                    modifier = Modifier.padding(horizontal = 10.dp)
-                )
-                Text(
-                    text = "SKU: ${productDetails?.sku}",
-                    color = Color.LightGray,
-                    fontSize = 15.sp,
-                    modifier = Modifier.padding(10.dp)
-                )
-
-
-                // Color Options
-                Text(
-                    text = "Color:",
-                    fontSize = 17.sp,
-                    color = Color.Gray,
-                    modifier = Modifier.padding(start = 10.dp, top = 10.dp)
-                )
-                LazyRow(
-                    modifier = Modifier
-                        .wrapContentHeight()
-                        .fillMaxWidth()
-                        .align(Alignment.CenterHorizontally)
-                        .padding(10.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-
-                ) {
-
-                    items(attributes) { color ->
-                        val index = attributes.indexOf(color)
-                        Box(
-                            modifier = Modifier
-                                .size(50.dp)
-                                .clip(CircleShape)
-                                .border(
-                                    width = 2.dp,
-                                    color = if (index == selectedColorIndex) Color.Black else Color.Gray,
-                                    shape = CircleShape
-                                )
-                                .clickable {
-                                    selectedColorIndex = index
-                                    val targetImage = color.images.firstOrNull()
-                                    val targetIndex = allImages.indexOf(targetImage)
-                                    if (targetIndex != -1) {
-                                        coroutineScope.launch {
-                                            pagerState.animateScrollToPage(
-                                                targetIndex
-                                            )
-                                        }
-                                    }
-                                }
-                        ) {
-                            AsyncImage(
-                                model = color.swatch_url,
-                                contentDescription = color.option_id,
-                                modifier = Modifier.fillMaxSize()
-                            )
-                        }
-                    }
-                }
-
-                //Payment card
-                Card(
-                    elevation = CardDefaults.cardElevation(defaultElevation = 5.dp),
-                    modifier = Modifier
-                        .padding(10.dp)
-                        .fillMaxWidth()
-                        .height(70.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.White)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize(),
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .padding(10.dp)
-                                .fillMaxSize()
-                        ) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxSize(),
-                                horizontalAlignment = Alignment.Start
-                            ) {
-                                Text(
-                                    text = "or 4 interest-free payment",
-                                    modifier = Modifier.padding(start = 10.dp, top = 5.dp),
-                                    fontSize = 13.sp,
-                                    textAlign = TextAlign.Start
-                                )
-                                Row {
-                                    Text(
-                                        text = "0.88 KWD  ",
-                                        modifier = Modifier.padding(start = 10.dp),
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        textAlign = TextAlign.Start
-                                    )
-                                    Text(
-                                        text = "Learn More",
-                                        fontSize = 13.sp,
-                                        textDecoration = TextDecoration.Underline,
-                                        textAlign = TextAlign.Start
-
-                                    )
-                                }
-
-
-                            }
-                        }
-                    }
-                }
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                // Quantity Selector
-                Text(
-                    text = "Quantity",
-                    fontSize = 17.sp,
-                    color = Color.Gray,
-                    modifier = Modifier.padding(10.dp)
-                )
-                Row(modifier = Modifier.padding(10.dp)) {
-                    Box(
-                        modifier = Modifier
-                            .size(40.dp)
-                            .background(Color.LightGray)
-                            .clickable { if (productQuantity > 0) productQuantity-- },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(text = "-", fontSize = 18.sp)
-                    }
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Box(
-                        modifier = Modifier
-                            .height(40.dp)
-                            .width(60.dp)
-                            .border(1.dp, Color.Gray)
-                            .padding(10.dp)
-                            .background(Color.White),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(text = "$productQuantity", fontSize = 18.sp)
-                    }
-                    Spacer(modifier = Modifier.width(4.dp))
-
-                    Box(
-                        modifier = Modifier
-                            .size(40.dp)
-                            .background(Color.Black)
-                            .clickable { productQuantity++ },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(text = "+", fontSize = 18.sp, color = Color.White)
-                    }
-                }
-
-                // Product Information
-                var isProductDetailExpanded by remember { mutableStateOf(false) }
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { isProductDetailExpanded = !isProductDetailExpanded }
-                        .padding(15.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(text = "PRODUCT INFORMATION", fontSize = 17.sp)
-                    Icon(
-                        imageVector = if (isProductDetailExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                        contentDescription = "Toggle Info"
-                    )
-                }
-                AnimatedVisibility(visible = isProductDetailExpanded) {
-                     productDetails?.description?.let {
-                         Text(
-                             text = cleanText(
-                                 it
-                             ),
-                             fontSize = 13.sp,
-                             color = Color.Gray,
-                             modifier = Modifier.padding(10.dp)
-                         )
-                    }
-
-                }
                 Spacer(modifier = Modifier.height(120.dp))
             }
 
             BottomButtons(
-                modifier = Modifier
-                    .constrainAs(bottomLayout) {
-                        bottom.linkTo(parent.bottom)
-                    }
+                modifier = Modifier.constrainAs(bottomButtons) {
+                    bottom.linkTo(parent.bottom)
+                }
             )
         }
     }
 
-    // Listen for page changes and update the selected color
     LaunchedEffect(pagerState.currentPage) {
         val currentImage = allImages.getOrNull(pagerState.currentPage)
-        val newColorIndex = attributes.indexOfFirst { color -> currentImage in color.images }
+        val newColorIndex = attributes.indexOfFirst { currentImage in it.images }
         if (newColorIndex != -1 && newColorIndex != selectedColorIndex) {
             selectedColorIndex = newColorIndex
         }
     }
 }
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -575,12 +312,13 @@ fun ColorOptions(
 fun PaymentInfoCard() {
     Card(
         elevation = CardDefaults.cardElevation(defaultElevation = 5.dp),
-        modifier = Modifier.padding(10.dp).fillMaxWidth().height(70.dp),
+        modifier = Modifier.padding(10.dp).fillMaxWidth().height(60.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White)
     ) {
         Column(
             modifier = Modifier.fillMaxSize().padding(10.dp),
-            horizontalAlignment = Alignment.Start
+            horizontalAlignment = Alignment.Start,
+            verticalArrangement = Arrangement.Center
         ) {
             Text(
                 text = "or 4 interest-free payment",
