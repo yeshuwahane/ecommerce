@@ -77,7 +77,7 @@ dependencies {
 
     //hilt
     implementation("com.google.dagger:hilt-android:2.51.1")
-    kapt("com.google.dagger:hilt-android-compiler:2.44")
+    kapt("com.google.dagger:hilt-android-compiler:2.51.1")
     implementation("androidx.hilt:hilt-navigation-compose:1.2.0")
 
     //livedata
@@ -86,6 +86,3 @@ dependencies {
     implementation ("androidx.constraintlayout:constraintlayout-compose:1.0.1")
 }
 
-kapt {
-    correctErrorTypes = true
-}

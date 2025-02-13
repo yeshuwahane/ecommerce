@@ -1,4 +1,4 @@
-package com.yeshuwahane.task.presentation
+package com.yeshuwahane.task.di
 
 import android.app.Application
 import dagger.hilt.android.HiltAndroidApp
